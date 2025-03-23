@@ -1,0 +1,4 @@
+enum HistoryStatus {
+    RETURNED,
+    BORROWED
+}
