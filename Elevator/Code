@@ -1,0 +1,245 @@
+import java.util.*;
+
+// Enumerations
+enum ElevatorDirection {
+    UP, DOWN, IDLE
+}
+
+enum ElevatorState {
+    MOVING, STOPPED, MAINTENANCE, OUT_OF_SERVICE
+}
+
+enum ButtonType {
+    UP, DOWN, FLOOR_SELECTION, EMERGENCY
+}
+
+// Request Class
+class Request {
+    private int sourceFloor;
+    private int destinationFloor;
+    private int numberOfPassengers;
+    private int totalWeight;
+
+    public Request(int sourceFloor, int destinationFloor, int numberOfPassengers, int totalWeight) {
+        this.sourceFloor = sourceFloor;
+        this.destinationFloor = destinationFloor;
+        this.numberOfPassengers = numberOfPassengers;
+        this.totalWeight = totalWeight;
+    }
+
+    // Getters and setters
+    public int getSourceFloor() { return sourceFloor; }
+    public int getDestinationFloor() { return destinationFloor; }
+    public int getNumberOfPassengers() { return numberOfPassengers; }
+    public int getTotalWeight() { return totalWeight; }
+}
+
+// Button Class
+class Button {
+    private ButtonType type;
+    private Floor associatedFloor;
+
+    public Button(ButtonType type, Floor associatedFloor) {
+        this.type = type;
+        this.associatedFloor = associatedFloor;
+    }
+
+    public void press() {
+        // Logic for button press
+        if (type == ButtonType.UP || type == ButtonType.DOWN) {
+            associatedFloor.callElevator(type == ButtonType.UP ? ElevatorDirection.UP : ElevatorDirection.DOWN);
+        }
+    }
+}
+
+// Floor Class
+class Floor {
+    private int floorNumber;
+    private List<Button> buttons;
+
+    public Floor(int floorNumber) {
+        this.floorNumber = floorNumber;
+        this.buttons = new ArrayList<>();
+
+        // Create up and down buttons for each floor
+        buttons.add(new Button(ButtonType.UP, this));
+        buttons.add(new Button(ButtonType.DOWN, this));
+    }
+
+    public void callElevator(ElevatorDirection direction) {
+        // Notify elevator system about elevator call
+        ElevatorSystem.getInstance().requestElevator(floorNumber, direction);
+    }
+
+    public int getFloorNumber() { return floorNumber; }
+}
+
+// Elevator Class
+class Elevator {
+    private int currentFloor;
+    private ElevatorDirection currentDirection;
+    private ElevatorState currentState;
+    private List<Request> requestQueue;
+    private int maxWeight;
+    private int currentWeight;
+    private int elevatorId;
+
+    public Elevator(int elevatorId, int maxWeight) {
+        this.elevatorId = elevatorId;
+        this.currentFloor = 0;
+        this.currentDirection = ElevatorDirection.IDLE;
+        this.currentState = ElevatorState.STOPPED;
+        this.requestQueue = new ArrayList<>();
+        this.maxWeight = maxWeight;
+        this.currentWeight = 0;
+    }
+
+    public void move() {
+        if (requestQueue.isEmpty()) {
+            currentDirection = ElevatorDirection.IDLE;
+            currentState = ElevatorState.STOPPED;
+            return;
+        }
+
+        currentState = ElevatorState.MOVING;
+        Request nextRequest = requestQueue.get(0);
+
+        // Determine direction based on current floor and destination
+        currentDirection = nextRequest.getDestinationFloor() > currentFloor ?
+            ElevatorDirection.UP : ElevatorDirection.DOWN;
+
+        // Simulate movement
+        currentFloor = nextRequest.getDestinationFloor();
+        removeRequest();
+    }
+
+    public void stop() {
+        currentState = ElevatorState.STOPPED;
+    }
+
+    public void addRequest(Request request) {
+        if (checkWeight(request)) {
+            requestQueue.add(request);
+            currentWeight += request.getTotalWeight();
+        }
+    }
+
+    public void removeRequest() {
+        if (!requestQueue.isEmpty()) {
+            Request removedRequest = requestQueue.remove(0);
+            currentWeight -= removedRequest.getTotalWeight();
+        }
+    }
+
+    public boolean checkWeight(Request request) {
+        return currentWeight + request.getTotalWeight() <= maxWeight;
+    }
+
+    public void emergencyStop() {
+        currentState = ElevatorState.OUT_OF_SERVICE;
+        requestQueue.clear();
+        currentWeight = 0;
+    }
+
+    // Getters
+    public int getCurrentFloor() { return currentFloor; }
+    public ElevatorDirection getCurrentDirection() { return currentDirection; }
+    public ElevatorState getCurrentState() { return currentState; }
+}
+
+// ElevatorController Class
+class ElevatorController {
+    private ElevatorSystem elevatorSystem;
+
+    public ElevatorController(ElevatorSystem elevatorSystem) {
+        this.elevatorSystem = elevatorSystem;
+    }
+
+    public void processRequest(Request request) {
+        // Find the most optimal elevator for the request
+        Elevator bestElevator = findBestElevator(request);
+        if (bestElevator != null) {
+            bestElevator.addRequest(request);
+        }
+    }
+
+    private Elevator findBestElevator(Request request) {
+        // Simple allocation strategy
+        // In a real-world scenario, this would be more complex
+        List<Elevator> elevators = elevatorSystem.getElevators();
+        return elevators.stream()
+            .filter(e -> e.getCurrentState() != ElevatorState.OUT_OF_SERVICE)
+            .min((e1, e2) ->
+                Math.abs(e1.getCurrentFloor() - request.getSourceFloor()) -
+                Math.abs(e2.getCurrentFloor() - request.getSourceFloor())
+            )
+            .orElse(null);
+    }
+
+    public void optimizeElevatorAllocation() {
+        // Implement advanced algorithms for optimizing elevator allocation
+        // This could involve predictive modeling, machine learning, etc.
+    }
+}
+
+// ElevatorSystem Class (Singleton)
+class ElevatorSystem {
+    private static ElevatorSystem instance;
+    private List<Elevator> elevators;
+    private List<Floor> floors;
+    private ElevatorController controller;
+
+    private ElevatorSystem() {
+        elevators = new ArrayList<>();
+        floors = new ArrayList<>();
+        controller = new ElevatorController(this);
+        initializeSystem();
+    }
+
+    public static synchronized ElevatorSystem getInstance() {
+        if (instance == null) {
+            instance = new ElevatorSystem();
+        }
+        return instance;
+    }
+
+    private void initializeSystem() {
+        // Create 3 elevators
+        for (int i = 0; i < 3; i++) {
+            addElevator(new Elevator(i + 1, 1000)); // Max weight 1000 kg
+        }
+
+        // Create 10 floors
+        for (int i = 0; i < 10; i++) {
+            floors.add(new Floor(i));
+        }
+    }
+
+    public void addElevator(Elevator elevator) {
+        elevators.add(elevator);
+    }
+
+    public void requestElevator(int floorNumber, ElevatorDirection direction) {
+        // Create a request and process it
+        Request request = new Request(floorNumber, floorNumber, 1, 75); // Default passenger weight
+        controller.processRequest(request);
+    }
+
+    public void scheduleElevator(Request request) {
+        controller.processRequest(request);
+    }
+
+    // Getter for elevators (used in controller)
+    public List<Elevator> getElevators() {
+        return elevators;
+    }
+
+    // Main method for demonstration
+    public static void main(String[] args) {
+        ElevatorSystem system = ElevatorSystem.getInstance();
+
+        // Simulate some elevator requests
+        system.requestElevator(5, ElevatorDirection.UP);
+        system.requestElevator(2, ElevatorDirection.DOWN);
+    }
+}
